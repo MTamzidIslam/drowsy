@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Eye Detector</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      background: #f2f2f2;
+    }
+
+    video {
+      width: 90%;
+      max-width: 500px;
+      border-radius: 10px;
+    }
+
+    #status {
+      font-size: 32px;
+      font-weight: bold;
+      margin: 20px;
+    }
+
+    button {
+      font-size: 20px;
+      padding: 12px 25px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Eye Detector</h1>
+
+  <button onclick="startCamera()">Start Camera</button>
+
+  <br><br>
+
+  <video id="video" autoplay playsinline></video>
+
+  <div id="status">Press Start Camera</div>
+
+  <script>
+    const video = document.getElementById("video");
+    const status = document.getElementById("status");
+
+    async function startCamera() {
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user"
+          }
+        });
+
+        video.srcObject = stream;
+
+        status.innerHTML = "Camera is working!";
+
+      } catch (error) {
+
+        status.innerHTML = "Camera permission denied";
+
+        console.log(error);
+      }
+    }
+  </script>
+
+</body>
+</html>
