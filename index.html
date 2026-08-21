@@ -34,13 +34,11 @@
       background: #eeeeee;
     }
 
-
     video {
       width: 90%;
       max-width: 500px;
       border-radius: 15px;
     }
-
 
     #status {
       font-size: 30px;
@@ -48,13 +46,11 @@
       margin: 20px;
     }
 
-
     #firebaseStatus {
       font-size: 18px;
       font-weight: bold;
       margin: 15px;
     }
-
 
     button {
       font-size: 18px;
@@ -83,7 +79,6 @@
   <button onclick="startCamera()">
     📷 Start Camera
   </button>
-
 
   <button onclick="stopCamera()">
     ⛔ Camera Off
@@ -131,7 +126,7 @@
 
 const firebaseConfig = {
 
-  apiKey: "AIzaSyAuIPwcMswB3X3NCoreVsWZQEq0MNxvqA8",
+  apiKey: "AIzaSyAuIPwcMswWZQEq0MNxvqA8",
 
   authDomain: "drowsy-ff59c.firebaseapp.com",
 
@@ -159,11 +154,7 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 
-
-// Get Realtime Database
-
-const database =
-  firebase.database();
+const database = firebase.database();
 
 
 // ======================================================
@@ -173,10 +164,8 @@ const database =
 const video =
   document.getElementById("video");
 
-
 const status =
   document.getElementById("status");
-
 
 const firebaseStatus =
   document.getElementById("firebaseStatus");
@@ -191,6 +180,27 @@ firebaseStatus.innerHTML =
 
 
 // ======================================================
+// VARIABLES
+// ======================================================
+
+let faceMesh = null;
+
+let cameraStream = null;
+
+let detecting = false;
+
+
+// Current eye status
+
+let currentEyeStatus = "eye open";
+
+
+// Firebase timer
+
+let firebaseTimer = null;
+
+
+// ======================================================
 // TEST FIREBASE
 // ======================================================
 
@@ -200,7 +210,7 @@ function testFirebase() {
     "⏳ Testing Firebase write...";
 
 
-  database.ref("test").set({
+  database.ref("test").push({
 
     message: "Hello from Drowsy!",
 
@@ -219,7 +229,10 @@ function testFirebase() {
 
   .catch((error) => {
 
-    console.log("Firebase error:", error);
+    console.log(
+      "Firebase error:",
+      error
+    );
 
     firebaseStatus.innerHTML =
       "❌ Firebase WRITE failed: "
@@ -232,13 +245,22 @@ function testFirebase() {
 
 // ======================================================
 // SEND EYE STATUS TO FIREBASE
+// EVERY 1 SECOND
 // ======================================================
 
-function sendEyeStatus(isClosed) {
+function sendEyeStatusToFirebase() {
 
-  database.ref("drowsy").set({
 
-    eyeClosed: isClosed,
+  if (!detecting) {
+
+    return;
+
+  }
+
+
+  database.ref("drowsy").push({
+
+    eyeStatus: currentEyeStatus,
 
     timestamp: Date.now()
 
@@ -248,9 +270,13 @@ function sendEyeStatus(isClosed) {
   .then(() => {
 
     console.log(
-      "Eye status sent:",
-      isClosed
+      "Firebase:",
+      currentEyeStatus
     );
+
+    firebaseStatus.innerHTML =
+      "🟢 Firebase: " +
+      currentEyeStatus;
 
   })
 
@@ -271,14 +297,46 @@ function sendEyeStatus(isClosed) {
 
 
 // ======================================================
-// VARIABLES
+// START FIREBASE TIMER
 // ======================================================
 
-let faceMesh = null;
+function startFirebaseTimer() {
 
-let cameraStream = null;
 
-let detecting = false;
+  // Send first data immediately
+
+  sendEyeStatusToFirebase();
+
+
+  // Then every 1 second
+
+  firebaseTimer = setInterval(
+
+    sendEyeStatusToFirebase,
+
+    1000
+
+  );
+
+}
+
+
+// ======================================================
+// STOP FIREBASE TIMER
+// ======================================================
+
+function stopFirebaseTimer() {
+
+
+  if (firebaseTimer) {
+
+    clearInterval(firebaseTimer);
+
+    firebaseTimer = null;
+
+  }
+
+}
 
 
 // ======================================================
@@ -321,6 +379,11 @@ async function startCamera() {
     setupFaceMesh();
 
 
+    // Start Firebase 1-second timer
+
+    startFirebaseTimer();
+
+
   }
 
 
@@ -332,7 +395,6 @@ async function startCamera() {
 
     status.innerHTML =
       "❌ Camera error";
-
 
   }
 
@@ -405,7 +467,6 @@ async function detectFace() {
 
     });
 
-
   }
 
 
@@ -423,7 +484,6 @@ function distance(point1, point2) {
 
   const x =
     point1.x - point2.x;
-
 
   const y =
     point1.y - point2.y;
@@ -443,6 +503,7 @@ function distance(point1, point2) {
 // ======================================================
 
 function calculateEAR(
+
   landmarks,
   p1,
   p2,
@@ -450,6 +511,7 @@ function calculateEAR(
   p4,
   p5,
   p6
+
 ) {
 
 
@@ -457,7 +519,6 @@ function calculateEAR(
     distance(
 
       landmarks[p2],
-
       landmarks[p6]
 
     );
@@ -467,7 +528,6 @@ function calculateEAR(
     distance(
 
       landmarks[p3],
-
       landmarks[p5]
 
     );
@@ -477,7 +537,6 @@ function calculateEAR(
     distance(
 
       landmarks[p1],
-
       landmarks[p4]
 
     );
@@ -520,6 +579,8 @@ function onResults(results) {
       "❌ FACE NOT DETECTED";
 
 
+    // Keep previous eye status
+
     return;
 
   }
@@ -541,15 +602,10 @@ function onResults(results) {
       landmarks,
 
       33,
-
       160,
-
       158,
-
       133,
-
       153,
-
       144
 
     );
@@ -565,15 +621,10 @@ function onResults(results) {
       landmarks,
 
       362,
-
       385,
-
       387,
-
       263,
-
       373,
-
       380
 
     );
@@ -583,6 +634,12 @@ function onResults(results) {
 
   const ear =
     (leftEAR + rightEAR) / 2;
+
+
+  console.log(
+    "EAR:",
+    ear
+  );
 
 
   // ------------------------------------------
@@ -596,8 +653,8 @@ function onResults(results) {
       "😴 EYES CLOSED";
 
 
-    sendEyeStatus(true);
-
+    currentEyeStatus =
+      "eye closed";
 
   }
 
@@ -613,7 +670,8 @@ function onResults(results) {
       "👀 EYES OPEN";
 
 
-    sendEyeStatus(false);
+    currentEyeStatus =
+      "eye open";
 
   }
 
@@ -628,6 +686,11 @@ function stopCamera() {
 
 
   detecting = false;
+
+
+  // Stop Firebase timer
+
+  stopFirebaseTimer();
 
 
   if (cameraStream) {
@@ -654,11 +717,11 @@ function stopCamera() {
     "📷 Camera OFF";
 
 
-  // Tell Firebase
-
-  sendEyeStatus(false);
+  firebaseStatus.innerHTML =
+    "⚪ Firebase timer stopped";
 
 }
+
 
 </script>
 
