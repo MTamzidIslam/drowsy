@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>Face Detector</title>
+  <title>Eye Closure Detector</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 
@@ -22,7 +22,7 @@
     }
 
     #status {
-      font-size: 28px;
+      font-size: 30px;
       font-weight: bold;
       margin: 20px;
     }
@@ -40,7 +40,7 @@
 
 <body>
 
-  <h1>👁️ Face Detector</h1>
+  <h1>👁️ Eye Closure Detector</h1>
 
   <button onclick="startCamera()">📷 Start Camera</button>
 
@@ -63,9 +63,9 @@
     let detecting = false;
 
 
-    // -------------------------
+    // =========================================
     // START CAMERA
-    // -------------------------
+    // =========================================
 
     async function startCamera() {
 
@@ -101,9 +101,9 @@
     }
 
 
-    // -------------------------
-    // SETUP FACE DETECTION
-    // -------------------------
+    // =========================================
+    // SETUP MEDIAPIPE
+    // =========================================
 
     function setupFaceMesh() {
 
@@ -140,9 +140,9 @@
     }
 
 
-    // -------------------------
-    // DETECT FACE
-    // -------------------------
+    // =========================================
+    // SEND CAMERA FRAME TO MEDIAPIPE
+    // =========================================
 
     async function detectFace() {
 
@@ -163,9 +163,46 @@
     }
 
 
-    // -------------------------
+    // =========================================
+    // DISTANCE BETWEEN TWO POINTS
+    // =========================================
+
+    function distance(point1, point2) {
+
+      const x =
+        point1.x - point2.x;
+
+      const y =
+        point1.y - point2.y;
+
+      return Math.sqrt(x * x + y * y);
+
+    }
+
+
+    // =========================================
+    // EYE ASPECT RATIO
+    // =========================================
+
+    function calculateEAR(landmarks, p1, p2, p3, p4, p5, p6) {
+
+      const vertical1 =
+        distance(landmarks[p2], landmarks[p6]);
+
+      const vertical2 =
+        distance(landmarks[p3], landmarks[p5]);
+
+      const horizontal =
+        distance(landmarks[p1], landmarks[p4]);
+
+      return (vertical1 + vertical2) / (2 * horizontal);
+
+    }
+
+
+    // =========================================
     // DETECTION RESULT
-    // -------------------------
+    // =========================================
 
     function onResults(results) {
 
@@ -173,27 +210,80 @@
         return;
       }
 
+
+      // No face
       if (
-        results.multiFaceLandmarks &&
-        results.multiFaceLandmarks.length > 0
+        !results.multiFaceLandmarks ||
+        results.multiFaceLandmarks.length === 0
       ) {
 
-        status.innerHTML = "✅ FACE DETECTED";
+        status.innerHTML =
+          "❌ FACE NOT DETECTED";
+
+        return;
+
+      }
+
+
+      const landmarks =
+        results.multiFaceLandmarks[0];
+
+
+      // LEFT EYE
+      const leftEAR =
+        calculateEAR(
+          landmarks,
+          33,
+          160,
+          158,
+          133,
+          153,
+          144
+        );
+
+
+      // RIGHT EYE
+      const rightEAR =
+        calculateEAR(
+          landmarks,
+          362,
+          385,
+          387,
+          263,
+          373,
+          380
+        );
+
+
+      // Average of both eyes
+      const ear =
+        (leftEAR + rightEAR) / 2;
+
+
+      // =====================================
+      // EYE OPEN/CLOSED THRESHOLD
+      // =====================================
+
+      if (ear < 0.20) {
+
+        status.innerHTML =
+          "😴 EYES CLOSED";
 
       }
 
       else {
 
-        status.innerHTML = "❌ FACE NOT DETECTED";
+        status.innerHTML =
+          "👀 EYES OPEN";
 
       }
 
     }
 
 
-    // -------------------------
+    // =========================================
     // STOP CAMERA
-    // -------------------------
+    // =========================================
 
     function stopCamera() {
 
