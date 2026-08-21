@@ -1,19 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
+
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
 
   <title>Eye Closure Detector</title>
 
+  <!-- MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
   <style>
+
     body {
       font-family: Arial;
       text-align: center;
       background: #eeeeee;
+    }
+
+    h1 {
+      margin-top: 20px;
     }
 
     video {
@@ -27,89 +35,213 @@
       font-weight: bold;
       margin: 20px;
     }
+
+    button {
+      font-size: 20px;
+      padding: 12px 25px;
+      border-radius: 10px;
+      border: none;
+    }
+
   </style>
+
 </head>
+
 
 <body>
 
-  <h1>👁️ Eye Closure Detector</h1>
+  <h1>👁️ Eye Detector</h1>
 
-  <button onclick="startCamera()">Start Camera</button>
+  <button onclick="startCamera()">
+    Start Camera
+  </button>
 
   <br><br>
 
-  <video id="video" autoplay playsinline></video>
+  <video id="video"
+         autoplay
+         playsinline>
+  </video>
 
-  <div id="status">Press Start Camera</div>
+  <div id="status">
+    Press Start Camera
+  </div>
 
-  <script>
 
-    const video = document.getElementById("video");
-    const status = document.getElementById("status");
+<script>
 
-    let faceMesh;
+const video = document.getElementById("video");
+const status = document.getElementById("status");
 
-    function startCamera() {
+let faceMesh;
 
-      faceMesh = new FaceMesh({
-        locateFile: (file) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-        }
-      });
 
-      faceMesh.setOptions({
-        maxNumFaces: 1,
-        refineLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-      });
+// ---------------------------
+// Start camera
+// ---------------------------
 
-      faceMesh.onResults(detectEyes);
+async function startCamera() {
 
-      navigator.mediaDevices.getUserMedia({
+  try {
+
+    const stream =
+      await navigator.mediaDevices.getUserMedia({
+
         video: {
           facingMode: "user"
         }
-      }).then(stream => {
-
-        video.srcObject = stream;
-
-        video.onloadeddata = () => {
-          detectVideo();
-        };
-
-      }).catch(error => {
-
-        status.innerHTML = "Camera permission denied";
 
       });
+
+    video.srcObject = stream;
+
+    setupFaceMesh();
+
+  }
+
+  catch(error) {
+
+    status.innerHTML =
+      "❌ Camera permission denied";
+
+    console.log(error);
+
+  }
+
+}
+
+
+// ---------------------------
+// Setup MediaPipe
+// ---------------------------
+
+function setupFaceMesh() {
+
+  faceMesh = new FaceMesh({
+
+    locateFile: function(file) {
+
+      return
+      `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+
     }
 
-
-    async function detectVideo() {
-
-      await faceMesh.send({
-        image: video
-      });
-
-      requestAnimationFrame(detectVideo);
-    }
+  });
 
 
-    function detectEyes(results) {
+  faceMesh.setOptions({
 
-      if (!results.multiFaceLandmarks ||
-          results.multiFaceLandmarks.length === 0) {
+    maxNumFaces: 1,
 
-        status.innerHTML = "No face detected";
-        return;
-      }
+    refineLandmarks: true,
 
-      status.innerHTML = "Face detected 👤";
+    minDetectionConfidence: 0.5,
 
-    }
+    minTrackingConfidence: 0.5
 
-  </script>
+  });
+
+
+  faceMesh.onResults(checkEyes);
+
+
+  video.onloadeddata = function() {
+
+    detect();
+
+  };
+
+}
+
+
+// ---------------------------
+// Send video frame
+// ---------------------------
+
+async function detect() {
+
+  if (faceMesh) {
+
+    await faceMesh.send({
+
+      image: video
+
+    });
+
+  }
+
+  requestAnimationFrame(detect);
+
+}
+
+
+// ---------------------------
+// Eye detection
+// ---------------------------
+
+function checkEyes(results) {
+
+  if (!results.multiFaceLandmarks ||
+      results.multiFaceLandmarks.length === 0) {
+
+    status.innerHTML =
+      "❌ FACE NOT DETECTED";
+
+    return;
+
+  }
+
+
+  const landmarks =
+    results.multiFaceLandmarks[0];
+
+
+  // Left eye landmarks
+  const leftTop =
+    landmarks[159];
+
+  const leftBottom =
+    landmarks[145];
+
+
+  // Right eye landmarks
+  const rightTop =
+    landmarks[386];
+
+  const rightBottom =
+    landmarks[374];
+
+
+  // Calculate eye opening
+  const leftEye =
+    Math.abs(leftTop.y - leftBottom.y);
+
+  const rightEye =
+    Math.abs(rightTop.y - rightBottom.y);
+
+
+  const eyeAverage =
+    (leftEye + rightEye) / 2;
+
+
+  // Threshold
+  if (eyeAverage < 0.012) {
+
+    status.innerHTML =
+      "😴 EYES CLOSED";
+
+  }
+
+  else {
+
+    status.innerHTML =
+      "👀 EYES OPEN";
+
+  }
+
+}
+
+</script>
 
 </body>
 </html>
