@@ -1,667 +1,196 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drowsy - Eye Closure Detector</title>
+    
+    <!-- MEDIAPIPE -->
+    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    
+    <!-- FIREBASE (Compat Version) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-  <meta charset="UTF-8">
-
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0">
-
-  <title>Drowsy - Eye Closure Detector</title>
-
-
-  <!-- =========================
-       MEDIAPIPE
-       ========================= -->
-
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-
-
-  <!-- =========================
-       FIREBASE
-       ========================= -->
-
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-
-
-  <style>
-
-    body {
-      font-family: Arial;
-      text-align: center;
-      background: #eeeeee;
-    }
-
-
-    video {
-      width: 90%;
-      max-width: 500px;
-      border-radius: 15px;
-    }
-
-
-    #status {
-      font-size: 30px;
-      font-weight: bold;
-      margin: 20px;
-    }
-
-
-    #firebaseStatus {
-      font-size: 18px;
-      font-weight: bold;
-      margin: 15px;
-    }
-
-
-    button {
-      font-size: 18px;
-      padding: 10px 18px;
-      margin: 5px;
-      border-radius: 8px;
-      border: none;
-      cursor: pointer;
-    }
-
-  </style>
-
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: #eeeeee;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            transform: scaleX(-1);
+            border-radius: 8px;
+            background: #333;
+        }
+        button {
+            font-size: 16px;
+            padding: 10px 20px;
+            margin: 10px 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .btn-start { background: #28a745; color: white; }
+        .btn-stop { background: #dc3545; color: white; }
+        #status, #firebaseStatus {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        .status-open { color: #28a745; }
+        .status-closed { color: #dc3545; }
+    </style>
 </head>
-
-
 <body>
 
+<div class="container">
+    <h2>😴 Drowsy Eye Closure Detector</h2>
+    
+    <video id="webcam" autoplay playsinline></video>
+    
+    <div>
+        <button class="btn-start" onclick="startCamera()">📷 Start Camera</button>
+        <button class="btn-stop" onclick="stopCamera()">⛔ Camera Off</button>
+    </div>
 
-  <h1>😴 Drowsy</h1>
-
-  <h2>Eye Closure Detector</h2>
-
-
-  <!-- CAMERA BUTTONS -->
-
-  <button onclick="startCamera()">
-    📷 Start Camera
-  </button>
-
-
-  <button onclick="stopCamera()">
-    ⛔ Camera Off
-  </button>
-
-
-  <br><br>
-
-
-  <!-- CAMERA -->
-
-  <video id="video"
-         autoplay
-         playsinline>
-  </video>
-
-
-  <!-- EYE STATUS -->
-
-  <div id="status">
-    Camera OFF
-  </div>
-
-
-  <!-- FIREBASE STATUS -->
-
-  <div id="firebaseStatus">
-    Connecting to Firebase...
-  </div>
-
-
-  <!-- FIREBASE TEST BUTTON -->
-
-  <button onclick="testFirebase()">
-    🧪 Test Firebase
-  </button>
-
+    <div id="status">Camera Status: OFF</div>
+    <div id="firebaseStatus">⏳ Connecting to Firebase...</div>
+</div>
 
 <script>
-
-
-// ======================================================
-// FIREBASE CONFIG
-// ======================================================
-
-const firebaseConfig = {
-
-  apiKey: "AIzaSyAuIPwcMswB3X3NCoreVsWZQEq0MNxvqA8",
-
-  authDomain: "drowsy-ff59c.firebaseapp.com",
-
-  databaseURL:
-    "https://drowsy-ff59c-default-rtdb.firebaseio.com",
-
-  projectId: "drowsy-ff59c",
-
-  storageBucket:
-    "drowsy-ff59c.firebasestorage.app",
-
-  messagingSenderId: "1079489940696",
-
-  appId:
-    "1:1079489940696:web:99498117829688ba7b5bad",
-
-  measurementId: "G-1F7QS9KWJ7"
-
-};
-
-
-// ======================================================
-// INITIALIZE FIREBASE
-// ======================================================
-
-firebase.initializeApp(firebaseConfig);
-
-
-// Get Realtime Database
-
-const database =
-  firebase.database();
-
-
-// ======================================================
-// HTML ELEMENTS
-// ======================================================
-
-const video =
-  document.getElementById("video");
-
-
-const status =
-  document.getElementById("status");
-
-
-const firebaseStatus =
-  document.getElementById("firebaseStatus");
-
-
-// ======================================================
-// FIREBASE CONNECTION STATUS
-// ======================================================
-
-firebaseStatus.innerHTML =
-  "🟢 Firebase connected";
-
-
-// ======================================================
-// TEST FIREBASE
-// ======================================================
-
-function testFirebase() {
-
-  firebaseStatus.innerHTML =
-    "⏳ Testing Firebase write...";
-
-
-  database.ref("test").set({
-
-    message: "Hello from Drowsy!",
-
-    time: Date.now()
-
-  })
-
-
-  .then(() => {
-
-    firebaseStatus.innerHTML =
-      "✅ Firebase WRITE successful";
-
-  })
-
-
-  .catch((error) => {
-
-    console.log("Firebase error:", error);
-
-    firebaseStatus.innerHTML =
-      "❌ Firebase WRITE failed: "
-      + error.message;
-
-  });
-
-}
-
-
-// ======================================================
-// SEND EYE STATUS TO FIREBASE
-// ======================================================
-
-function sendEyeStatus(isClosed) {
-
-  database.ref("drowsy").set({
-
-    eyeClosed: isClosed,
-
-    timestamp: Date.now()
-
-  })
-
-
-  .then(() => {
-
-    console.log(
-      "Eye status sent:",
-      isClosed
-    );
-
-  })
-
-
-  .catch((error) => {
-
-    console.log(
-      "Firebase error:",
-      error
-    );
-
-    firebaseStatus.innerHTML =
-      "🔴 Firebase error";
-
-  });
-
-}
-
-
-// ======================================================
-// VARIABLES
-// ======================================================
-
-let faceMesh = null;
-
-let cameraStream = null;
-
-let detecting = false;
-
-
-// ======================================================
-// START CAMERA
-// ======================================================
-
-async function startCamera() {
-
-
-  if (cameraStream) {
-
-    return;
-
-  }
-
-
-  try {
-
-
-    cameraStream =
-      await navigator.mediaDevices.getUserMedia({
-
-        video: {
-
-          facingMode: "user"
-
-        }
-
-      });
-
-
-    video.srcObject =
-      cameraStream;
-
-
-    status.innerHTML =
-      "Camera started...";
-
-
-    setupFaceMesh();
-
-
-  }
-
-
-  catch (error) {
-
-
-    console.log(error);
-
-
-    status.innerHTML =
-      "❌ Camera error";
-
-
-  }
-
-}
-
-
-// ======================================================
-// SETUP MEDIAPIPE
-// ======================================================
-
-function setupFaceMesh() {
-
-
-  faceMesh = new FaceMesh({
-
-    locateFile: function(file) {
-
-      return "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/"
-             + file;
-
+    // ==========================================
+    // 1. YOUR FIREBASE CONFIGURATION
+    // ==========================================
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        databaseURL: "YOUR_DATABASE_URL",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // Check Connection
+    const firebaseStatus = document.getElementById("firebaseStatus");
+    if (database) {
+        firebaseStatus.innerHTML = "🟢 Firebase Connected";
+    } else {
+        firebaseStatus.innerHTML = "🔴 Firebase Connection Failed";
     }
 
-  });
+    // ==========================================
+    // 2. EYE TRACKING & MEDIAPIPE LOGIC
+    // ==========================================
+    const videoElement = document.getElementById('webcam');
+    const statusElement = document.getElementById('status');
+    let camera = null;
+    let lastStatus = ""; // Tracks changes to avoid spamming Firebase
 
-
-  faceMesh.setOptions({
-
-    maxNumFaces: 1,
-
-    refineLandmarks: true,
-
-    minDetectionConfidence: 0.5,
-
-    minTrackingConfidence: 0.5
-
-  });
-
-
-  faceMesh.onResults(onResults);
-
-
-  detecting = true;
-
-
-  detectFace();
-
-}
-
-
-// ======================================================
-// PROCESS CAMERA FRAMES
-// ======================================================
-
-async function detectFace() {
-
-
-  if (!detecting) {
-
-    return;
-
-  }
-
-
-  if (video.readyState >= 2) {
-
-
-    await faceMesh.send({
-
-      image: video
-
+    // MediaPipe Face Mesh Setup
+    const faceMesh = new FaceMesh({
+        locateFile: (file) => `https://jsdelivr.net{file}`
     });
 
-
-  }
-
-
-  requestAnimationFrame(detectFace);
-
-}
-
-
-// ======================================================
-// DISTANCE BETWEEN TWO POINTS
-// ======================================================
-
-function distance(point1, point2) {
-
-
-  const x =
-    point1.x - point2.x;
-
-
-  const y =
-    point1.y - point2.y;
-
-
-  return Math.sqrt(
-
-    x * x + y * y
-
-  );
-
-}
-
-
-// ======================================================
-// EYE ASPECT RATIO
-// ======================================================
-
-function calculateEAR(
-  landmarks,
-  p1,
-  p2,
-  p3,
-  p4,
-  p5,
-  p6
-) {
-
-
-  const vertical1 =
-    distance(
-
-      landmarks[p2],
-
-      landmarks[p6]
-
-    );
-
-
-  const vertical2 =
-    distance(
-
-      landmarks[p3],
-
-      landmarks[p5]
-
-    );
-
-
-  const horizontal =
-    distance(
-
-      landmarks[p1],
-
-      landmarks[p4]
-
-    );
-
-
-  return (
-
-    (vertical1 + vertical2)
-
-    /
-
-    (2 * horizontal)
-
-  );
-
-}
-
-
-// ======================================================
-// FACE + EYE DETECTION
-// ======================================================
-
-function onResults(results) {
-
-
-  // ------------------------------------------
-  // NO FACE
-  // ------------------------------------------
-
-  if (
-
-    !results.multiFaceLandmarks ||
-
-    results.multiFaceLandmarks.length === 0
-
-  ) {
-
-
-    status.innerHTML =
-      "❌ FACE NOT DETECTED";
-
-
-    return;
-
-  }
-
-
-  // Get face landmarks
-
-  const landmarks =
-    results.multiFaceLandmarks[0];
-
-
-  // ------------------------------------------
-  // LEFT EYE
-  // ------------------------------------------
-
-  const leftEAR =
-    calculateEAR(
-
-      landmarks,
-
-      33,
-
-      160,
-
-      158,
-
-      133,
-
-      153,
-
-      144
-
-    );
-
-
-  // ------------------------------------------
-  // RIGHT EYE
-  // ------------------------------------------
-
-  const rightEAR =
-    calculateEAR(
-
-      landmarks,
-
-      362,
-
-      385,
-
-      387,
-
-      263,
-
-      373,
-
-      380
-
-    );
-
-
-  // Average EAR
-
-  const ear =
-    (leftEAR + rightEAR) / 2;
-
-
-  // ------------------------------------------
-  // EYES CLOSED
-  // ------------------------------------------
-
-  if (ear < 0.20) {
-
-
-    status.innerHTML =
-      "😴 EYES CLOSED";
-
-
-    sendEyeStatus(true);
-
-
-  }
-
-
-  // ------------------------------------------
-  // EYES OPEN
-  // ------------------------------------------
-
-  else {
-
-
-    status.innerHTML =
-      "👀 EYES OPEN";
-
-
-    sendEyeStatus(false);
-
-  }
-
-}
-
-
-// ======================================================
-// STOP CAMERA
-// ======================================================
-
-function stopCamera() {
-
-
-  detecting = false;
-
-
-  if (cameraStream) {
-
-
-    cameraStream
-      .getTracks()
-      .forEach(track => {
-
-        track.stop();
-
-      });
-
-
-    cameraStream = null;
-
-  }
-
-
-  video.srcObject = null;
-
-
-  status.innerHTML =
-    "📷 Camera OFF";
-
-
-  // Tell Firebase
-
-  sendEyeStatus(false);
-
-}
-
+    faceMesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+
+    faceMesh.onResults(onResults);
+
+    function onResults(results) {
+        if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+            return;
+        }
+
+        const landmarks = results.multiFaceLandmarks[0];
+
+        // Landmark indices for Eye Aperture (Top and Bottom points of eyelids)
+        // Left Eye: 386 (top), 374 (bottom) | Right Eye: 159 (top), 145 (bottom)
+        const leftTop = landmarks[386];
+        const leftBottom = landmarks[374];
+        const rightTop = landmarks[159];
+        const rightBottom = landmarks[145];
+
+        // Calculate distance between eyelids
+        const leftDist = Math.hypot(leftTop.x - leftBottom.x, leftTop.y - leftBottom.y);
+        const rightDist = Math.hypot(rightTop.x - rightBottom.x, rightTop.y - rightBottom.y);
+        
+        // Threshold evaluation (adjust 0.015 if the sensitivity is too high/low)
+        const threshold = 0.015; 
+        let currentStatus = (leftDist < threshold && rightDist < threshold) ? "closed" : "open";
+
+        // Display locally
+        if (currentStatus === "closed") {
+            statusElement.innerHTML = 'Eye Status: <span class="status-closed">CLOSED 😴</span>';
+        } else {
+            statusElement.innerHTML = 'Eye Status: <span class="status-open">OPEN 👀</span>';
+        }
+
+        // Send to Firebase ONLY when the state actually changes
+        if (currentStatus !== lastStatus) {
+            lastStatus = currentStatus;
+            updateFirebaseStatus(currentStatus);
+        }
+    }
+
+    function updateFirebaseStatus(status) {
+        database.ref("eye_tracking").set({
+            status: status,
+            timestamp: Date.now()
+        })
+        .then(() => {
+            firebaseStatus.innerHTML = `🟢 Firebase Sync: Eye is ${status.toUpperCase()}`;
+        })
+        .catch((error) => {
+            console.error("Firebase write error:", error);
+            firebaseStatus.innerHTML = `🔴 Sync Failed: ${error.message}`;
+        });
+    }
+
+    // ==========================================
+    // 3. CAMERA CONTROLS
+    // ==========================================
+    function startCamera() {
+        statusElement.innerHTML = "Starting camera...";
+        camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await faceMesh.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+        camera.start();
+    }
+
+    function stopCamera() {
+        if (camera) {
+            camera.stop();
+            statusElement.innerHTML = "Camera Status: OFF";
+            videoElement.srcObject = null;
+        }
+    }
 </script>
-
-
 </body>
 </html>
