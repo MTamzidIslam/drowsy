@@ -1,14 +1,24 @@
 <!DOCTYPE html>
 <html>
 <head>
+
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>Eye Closure Detector</title>
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
 
+  <title>Drowsy - Eye Closure Detector</title>
+
+  <!-- MediaPipe Face Mesh -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+
   <style>
+
     body {
       font-family: Arial;
       text-align: center;
@@ -27,285 +37,452 @@
       margin: 20px;
     }
 
+    #firebaseStatus {
+      font-size: 18px;
+      margin: 15px;
+    }
+
     button {
       font-size: 18px;
       padding: 10px 18px;
       margin: 5px;
       border-radius: 8px;
       border: none;
-      cursor: pointer;
     }
+
   </style>
+
 </head>
+
 
 <body>
 
-  <h1>👁️ Eye Closure Detector</h1>
+  <h1>😴 Drowsy</h1>
 
-  <button onclick="startCamera()">📷 Start Camera</button>
+  <h2>Eye Closure Detector</h2>
 
-  <button onclick="stopCamera()">⛔ Camera Off</button>
+  <button onclick="startCamera()">
+    📷 Start Camera
+  </button>
+
+  <button onclick="stopCamera()">
+    ⛔ Camera Off
+  </button>
 
   <br><br>
 
-  <video id="video" autoplay playsinline></video>
+  <video id="video"
+         autoplay
+         playsinline>
+  </video>
 
-  <div id="status">Camera OFF</div>
+  <div id="status">
+    Camera OFF
+  </div>
 
-
-  <script>
-
-    const video = document.getElementById("video");
-    const status = document.getElementById("status");
-
-    let faceMesh;
-    let cameraStream = null;
-    let detecting = false;
-
-
-    // =========================================
-    // START CAMERA
-    // =========================================
-
-    async function startCamera() {
-
-      if (cameraStream) {
-        return;
-      }
-
-      try {
-
-        cameraStream =
-          await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: "user"
-            }
-          });
-
-        video.srcObject = cameraStream;
-
-        status.innerHTML = "Camera started...";
-
-        setupFaceMesh();
-
-      }
-
-      catch (error) {
-
-        console.log(error);
-
-        status.innerHTML = "❌ Camera error";
-
-      }
-
-    }
+  <div id="firebaseStatus">
+    Connecting to Firebase...
+  </div>
 
 
-    // =========================================
-    // SETUP MEDIAPIPE
-    // =========================================
+<script>
 
-    function setupFaceMesh() {
 
-      faceMesh = new FaceMesh({
+// ==========================================
+// FIREBASE CONFIG
+// ==========================================
 
-        locateFile: function(file) {
+const firebaseConfig = {
 
-          return "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/" + file;
+  apiKey: "AIzaSyAuIPwcMswB3X3NCoreVsWZQEq0MNxvqA8",
 
+  authDomain: "drowsy-ff59c.firebaseapp.com",
+
+  databaseURL: "https://drowsy-ff59c-default-rtdb.firebaseio.com",
+
+  projectId: "drowsy-ff59c",
+
+  storageBucket: "drowsy-ff59c.firebasestorage.app",
+
+  messagingSenderId: "1079489940696",
+
+  appId: "1:1079489940696:web:99498117829688ba7b5bad",
+
+  measurementId: "G-1F7QS9KWJ7"
+
+};
+
+
+// ==========================================
+// START FIREBASE
+// ==========================================
+
+firebase.initializeApp(firebaseConfig);
+
+const database = firebase.database();
+
+
+// ==========================================
+// HTML ELEMENTS
+// ==========================================
+
+const video =
+  document.getElementById("video");
+
+const status =
+  document.getElementById("status");
+
+const firebaseStatus =
+  document.getElementById("firebaseStatus");
+
+
+// ==========================================
+// FIREBASE CONNECTION TEST
+// ==========================================
+
+firebaseStatus.innerHTML =
+  "🟢 Firebase connected";
+
+
+// ==========================================
+// SEND EYE STATUS TO FIREBASE
+// ==========================================
+
+function sendEyeStatus(isClosed) {
+
+  database.ref("drowsy").set({
+
+    eyeClosed: isClosed,
+
+    timestamp: Date.now()
+
+  })
+
+  .then(() => {
+
+    console.log(
+      "Firebase:",
+      isClosed
+    );
+
+  })
+
+  .catch((error) => {
+
+    console.log(error);
+
+    firebaseStatus.innerHTML =
+      "🔴 Firebase error";
+
+  });
+
+}
+
+
+// ==========================================
+// VARIABLES
+// ==========================================
+
+let faceMesh;
+
+let cameraStream = null;
+
+let detecting = false;
+
+
+// ==========================================
+// START CAMERA
+// ==========================================
+
+async function startCamera() {
+
+  if (cameraStream) {
+    return;
+  }
+
+  try {
+
+    cameraStream =
+      await navigator.mediaDevices.getUserMedia({
+
+        video: {
+          facingMode: "user"
         }
 
       });
 
 
-      faceMesh.setOptions({
+    video.srcObject =
+      cameraStream;
 
-        maxNumFaces: 1,
 
-        refineLandmarks: true,
+    status.innerHTML =
+      "Camera started...";
 
-        minDetectionConfidence: 0.5,
 
-        minTrackingConfidence: 0.5
+    setupFaceMesh();
 
+  }
+
+  catch (error) {
+
+    console.log(error);
+
+    status.innerHTML =
+      "❌ Camera error";
+
+  }
+
+}
+
+
+// ==========================================
+// SETUP MEDIAPIPE
+// ==========================================
+
+function setupFaceMesh() {
+
+  faceMesh = new FaceMesh({
+
+    locateFile: function(file) {
+
+      return "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/" + file;
+
+    }
+
+  });
+
+
+  faceMesh.setOptions({
+
+    maxNumFaces: 1,
+
+    refineLandmarks: true,
+
+    minDetectionConfidence: 0.5,
+
+    minTrackingConfidence: 0.5
+
+  });
+
+
+  faceMesh.onResults(onResults);
+
+  detecting = true;
+
+  detectFace();
+
+}
+
+
+// ==========================================
+// DETECT FACE
+// ==========================================
+
+async function detectFace() {
+
+  if (!detecting) {
+    return;
+  }
+
+
+  if (video.readyState >= 2) {
+
+    await faceMesh.send({
+
+      image: video
+
+    });
+
+  }
+
+
+  requestAnimationFrame(detectFace);
+
+}
+
+
+// ==========================================
+// DISTANCE
+// ==========================================
+
+function distance(point1, point2) {
+
+  const x =
+    point1.x - point2.x;
+
+  const y =
+    point1.y - point2.y;
+
+  return Math.sqrt(
+    x * x + y * y
+  );
+
+}
+
+
+// ==========================================
+// EYE ASPECT RATIO
+// ==========================================
+
+function calculateEAR(
+  landmarks,
+  p1,
+  p2,
+  p3,
+  p4,
+  p5,
+  p6
+) {
+
+  const vertical1 =
+    distance(
+      landmarks[p2],
+      landmarks[p6]
+    );
+
+  const vertical2 =
+    distance(
+      landmarks[p3],
+      landmarks[p5]
+    );
+
+  const horizontal =
+    distance(
+      landmarks[p1],
+      landmarks[p4]
+    );
+
+  return (
+    (vertical1 + vertical2)
+    /
+    (2 * horizontal)
+  );
+
+}
+
+
+// ==========================================
+// DETECTION RESULT
+// ==========================================
+
+function onResults(results) {
+
+
+  // No face
+  if (
+    !results.multiFaceLandmarks ||
+    results.multiFaceLandmarks.length === 0
+  ) {
+
+    status.innerHTML =
+      "❌ FACE NOT DETECTED";
+
+    return;
+
+  }
+
+
+  const landmarks =
+    results.multiFaceLandmarks[0];
+
+
+  // Left eye
+  const leftEAR =
+    calculateEAR(
+      landmarks,
+      33,
+      160,
+      158,
+      133,
+      153,
+      144
+    );
+
+
+  // Right eye
+  const rightEAR =
+    calculateEAR(
+      landmarks,
+      362,
+      385,
+      387,
+      263,
+      373,
+      380
+    );
+
+
+  // Average EAR
+  const ear =
+    (leftEAR + rightEAR) / 2;
+
+
+  // ========================================
+  // EYES CLOSED
+  // ========================================
+
+  if (ear < 0.20) {
+
+    status.innerHTML =
+      "😴 EYES CLOSED";
+
+    sendEyeStatus(true);
+
+  }
+
+
+  // ========================================
+  // EYES OPEN
+  // ========================================
+
+  else {
+
+    status.innerHTML =
+      "👀 EYES OPEN";
+
+    sendEyeStatus(false);
+
+  }
+
+}
+
+
+// ==========================================
+// STOP CAMERA
+// ==========================================
+
+function stopCamera() {
+
+  detecting = false;
+
+
+  if (cameraStream) {
+
+    cameraStream
+      .getTracks()
+      .forEach(track => {
+        track.stop();
       });
 
+    cameraStream = null;
 
-      faceMesh.onResults(onResults);
+  }
 
-      detecting = true;
 
-      detectFace();
+  video.srcObject = null;
 
-    }
 
+  status.innerHTML =
+    "📷 Camera OFF";
 
-    // =========================================
-    // SEND CAMERA FRAME TO MEDIAPIPE
-    // =========================================
 
-    async function detectFace() {
+  // Tell Firebase eyes are not closed
+  sendEyeStatus(false);
 
-      if (!detecting) {
-        return;
-      }
+}
 
-      if (video.readyState >= 2) {
-
-        await faceMesh.send({
-          image: video
-        });
-
-      }
-
-      requestAnimationFrame(detectFace);
-
-    }
-
-
-    // =========================================
-    // DISTANCE BETWEEN TWO POINTS
-    // =========================================
-
-    function distance(point1, point2) {
-
-      const x =
-        point1.x - point2.x;
-
-      const y =
-        point1.y - point2.y;
-
-      return Math.sqrt(x * x + y * y);
-
-    }
-
-
-    // =========================================
-    // EYE ASPECT RATIO
-    // =========================================
-
-    function calculateEAR(landmarks, p1, p2, p3, p4, p5, p6) {
-
-      const vertical1 =
-        distance(landmarks[p2], landmarks[p6]);
-
-      const vertical2 =
-        distance(landmarks[p3], landmarks[p5]);
-
-      const horizontal =
-        distance(landmarks[p1], landmarks[p4]);
-
-      return (vertical1 + vertical2) / (2 * horizontal);
-
-    }
-
-
-    // =========================================
-    // DETECTION RESULT
-    // =========================================
-
-    function onResults(results) {
-
-      if (!detecting) {
-        return;
-      }
-
-
-      // No face
-      if (
-        !results.multiFaceLandmarks ||
-        results.multiFaceLandmarks.length === 0
-      ) {
-
-        status.innerHTML =
-          "❌ FACE NOT DETECTED";
-
-        return;
-
-      }
-
-
-      const landmarks =
-        results.multiFaceLandmarks[0];
-
-
-      // LEFT EYE
-      const leftEAR =
-        calculateEAR(
-          landmarks,
-          33,
-          160,
-          158,
-          133,
-          153,
-          144
-        );
-
-
-      // RIGHT EYE
-      const rightEAR =
-        calculateEAR(
-          landmarks,
-          362,
-          385,
-          387,
-          263,
-          373,
-          380
-        );
-
-
-      // Average of both eyes
-      const ear =
-        (leftEAR + rightEAR) / 2;
-
-
-      // =====================================
-      // EYE OPEN/CLOSED THRESHOLD
-      // =====================================
-
-      if (ear < 0.20) {
-
-        status.innerHTML =
-          "😴 EYES CLOSED";
-
-      }
-
-      else {
-
-        status.innerHTML =
-          "👀 EYES OPEN";
-
-      }
-
-    }
-
-
-    // =========================================
-    // STOP CAMERA
-    // =========================================
-
-    function stopCamera() {
-
-      detecting = false;
-
-      if (cameraStream) {
-
-        cameraStream.getTracks().forEach(track => {
-          track.stop();
-        });
-
-        cameraStream = null;
-
-      }
-
-      video.srcObject = null;
-
-      status.innerHTML = "📷 Camera OFF";
-
-    }
-
-  </script>
+</script>
 
 </body>
 </html>
