@@ -32,12 +32,24 @@
       font-family: Arial;
       text-align: center;
       background: #eeeeee;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 5px;
+    }
+
+    h2 {
+      margin-top: 0;
     }
 
     video {
       width: 90%;
       max-width: 500px;
       border-radius: 15px;
+      margin-top: 15px;
+      transform: scaleX(1);
     }
 
     #status {
@@ -52,6 +64,12 @@
       margin: 15px;
     }
 
+    #cameraMode {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 10px;
+    }
+
     button {
       font-size: 18px;
       padding: 10px 18px;
@@ -59,6 +77,10 @@
       border-radius: 8px;
       border: none;
       cursor: pointer;
+    }
+
+    button:active {
+      transform: scale(0.97);
     }
 
   </style>
@@ -74,10 +96,16 @@
   <h2>for drivers</h2>
 
 
-  <!-- CAMERA BUTTONS -->
+  <!-- =========================
+       CAMERA BUTTONS
+       ========================= -->
 
   <button onclick="startCamera()">
     📷 Start Camera
+  </button>
+
+  <button onclick="switchCamera()">
+    🔄 Switch Camera
   </button>
 
   <button onclick="stopCamera()">
@@ -85,10 +113,17 @@
   </button>
 
 
-  <br><br>
+  <div id="cameraMode">
+    Camera: Front
+  </div>
 
 
-  <!-- CAMERA -->
+  <br>
+
+
+  <!-- =========================
+       CAMERA
+       ========================= -->
 
   <video id="video"
          autoplay
@@ -96,21 +131,27 @@
   </video>
 
 
-  <!-- EYE STATUS -->
+  <!-- =========================
+       EYE STATUS
+       ========================= -->
 
   <div id="status">
     Camera OFF
   </div>
 
 
-  <!-- FIREBASE STATUS -->
+  <!-- =========================
+       FIREBASE STATUS
+       ========================= -->
 
   <div id="firebaseStatus">
     Connecting to Firebase...
   </div>
 
 
-  <!-- FIREBASE TEST BUTTON -->
+  <!-- =========================
+       FIREBASE TEST BUTTON
+       ========================= -->
 
   <button onclick="testFirebase()">
     🧪 Test Firebase
@@ -126,24 +167,29 @@
 
 const firebaseConfig = {
 
-  apiKey: "AIzaSyAuIPwcMswWZQEq0MNxvqA8",
+  apiKey:
+    "AIzaSyAuIPwcMswB3X3NCoreVsWZQEq0MNxvqA8",
 
-  authDomain: "drowsy-ff59c.firebaseapp.com",
+  authDomain:
+    "drowsy-ff59c.firebaseapp.com",
 
   databaseURL:
     "https://drowsy-ff59c-default-rtdb.firebaseio.com",
 
-  projectId: "drowsy-ff59c",
+  projectId:
+    "drowsy-ff59c",
 
   storageBucket:
     "drowsy-ff59c.firebasestorage.app",
 
-  messagingSenderId: "1079489940696",
+  messagingSenderId:
+    "1079489940696",
 
   appId:
     "1:1079489940696:web:99498117829688ba7b5bad",
 
-  measurementId: "G-1F7QS9KWJ7"
+  measurementId:
+    "G-1F7QS9KWJ7"
 
 };
 
@@ -170,13 +216,8 @@ const status =
 const firebaseStatus =
   document.getElementById("firebaseStatus");
 
-
-// ======================================================
-// FIREBASE CONNECTION STATUS
-// ======================================================
-
-firebaseStatus.innerHTML =
-  "🟢 Firebase connected";
+const cameraMode =
+  document.getElementById("cameraMode");
 
 
 // ======================================================
@@ -189,15 +230,39 @@ let cameraStream = null;
 
 let detecting = false;
 
+let detectAnimationFrame = null;
 
-// Current eye status
+
+// ======================================================
+// CAMERA MODE
+// ======================================================
+
+// "user"      = front camera
+// "environment" = back camera
+
+let currentCameraMode = "user";
+
+
+// ======================================================
+// CURRENT EYE STATUS
+// ======================================================
 
 let currentEyeStatus = "eye open";
 
 
-// Firebase timer
+// ======================================================
+// FIREBASE TIMER
+// ======================================================
 
 let firebaseTimer = null;
+
+
+// ======================================================
+// FIREBASE CONNECTION STATUS
+// ======================================================
+
+firebaseStatus.innerHTML =
+  "🟢 Firebase connected";
 
 
 // ======================================================
@@ -209,7 +274,6 @@ function testFirebase() {
   firebaseStatus.innerHTML =
     "⏳ Testing Firebase write...";
 
-
   database.ref("test").push({
 
     message: "Hello from Drowsy!",
@@ -218,14 +282,12 @@ function testFirebase() {
 
   })
 
-
   .then(() => {
 
     firebaseStatus.innerHTML =
       "✅ Firebase WRITE successful";
 
   })
-
 
   .catch((error) => {
 
@@ -250,22 +312,50 @@ function testFirebase() {
 
 function sendEyeStatusToFirebase() {
 
-
   if (!detecting) {
-
     return;
-
   }
 
 
-  database.ref("drowsy").push({
+  const eyeData = {
 
-    eyeStatus: currentEyeStatus,
+    eyeStatus:
+      currentEyeStatus,
 
-    timestamp: Date.now()
+    timestamp:
+      Date.now()
 
-  })
+  };
 
+
+  // ====================================================
+  // 1. HISTORY
+  // ====================================================
+
+  const historyPromise =
+    database
+      .ref("drowsy")
+      .push(eyeData);
+
+
+  // ====================================================
+  // 2. LATEST
+  // ====================================================
+
+  const latestPromise =
+    database
+      .ref("drowsy/latest")
+      .set(eyeData);
+
+
+  // ====================================================
+  // WAIT FOR BOTH
+  // ====================================================
+
+  Promise.all([
+    historyPromise,
+    latestPromise
+  ])
 
   .then(() => {
 
@@ -279,7 +369,6 @@ function sendEyeStatusToFirebase() {
       currentEyeStatus;
 
   })
-
 
   .catch((error) => {
 
@@ -302,21 +391,20 @@ function sendEyeStatusToFirebase() {
 
 function startFirebaseTimer() {
 
+  // Prevent duplicate timers
+  stopFirebaseTimer();
 
-  // Send first data immediately
 
+  // Send immediately
   sendEyeStatusToFirebase();
 
 
   // Then every 1 second
-
-  firebaseTimer = setInterval(
-
-    sendEyeStatusToFirebase,
-
-    1000
-
-  );
+  firebaseTimer =
+    setInterval(
+      sendEyeStatusToFirebase,
+      1000
+    );
 
 }
 
@@ -326,7 +414,6 @@ function startFirebaseTimer() {
 // ======================================================
 
 function stopFirebaseTimer() {
-
 
   if (firebaseTimer) {
 
@@ -345,15 +432,16 @@ function stopFirebaseTimer() {
 
 async function startCamera() {
 
-
+  // Already running
   if (cameraStream) {
-
     return;
-
   }
 
 
   try {
+
+    status.innerHTML =
+      "⏳ Starting camera...";
 
 
     cameraStream =
@@ -361,9 +449,12 @@ async function startCamera() {
 
         video: {
 
-          facingMode: "user"
+          facingMode:
+            currentCameraMode
 
-        }
+        },
+
+        audio: false
 
       });
 
@@ -372,29 +463,261 @@ async function startCamera() {
       cameraStream;
 
 
+    // --------------------------------------------------
+    // Update camera label
+    // --------------------------------------------------
+
+    updateCameraLabel();
+
+
+    // --------------------------------------------------
+    // Mirror front camera
+    // --------------------------------------------------
+
+    if (currentCameraMode === "user") {
+
+      video.style.transform =
+        "scaleX(-1)";
+
+    }
+
+    else {
+
+      video.style.transform =
+        "scaleX(1)";
+
+    }
+
+
     status.innerHTML =
       "Camera started...";
 
 
-    setupFaceMesh();
+    // --------------------------------------------------
+    // Setup MediaPipe
+    // --------------------------------------------------
+
+    if (!faceMesh) {
+
+      setupFaceMesh();
+
+    }
 
 
-    // Start Firebase 1-second timer
+    detecting = true;
+
+
+    detectFace();
+
+
+    // --------------------------------------------------
+    // Start Firebase
+    // --------------------------------------------------
 
     startFirebaseTimer();
-
 
   }
 
 
   catch (error) {
 
+    console.log(
+      "Camera error:",
+      error
+    );
 
-    console.log(error);
+    cameraStream = null;
+
+    status.innerHTML =
+      "❌ Camera error: " +
+      error.message;
+
+  }
+
+}
+
+
+// ======================================================
+// SWITCH FRONT / BACK CAMERA
+// ======================================================
+
+async function switchCamera() {
+
+  // ----------------------------------------------------
+  // If camera is OFF, just change selected camera
+  // ----------------------------------------------------
+
+  if (!cameraStream) {
+
+    if (currentCameraMode === "user") {
+
+      currentCameraMode =
+        "environment";
+
+    }
+
+    else {
+
+      currentCameraMode =
+        "user";
+
+    }
+
+
+    updateCameraLabel();
+
+    return;
+
+  }
+
+
+  // ----------------------------------------------------
+  // Save new mode
+  // ----------------------------------------------------
+
+  if (currentCameraMode === "user") {
+
+    currentCameraMode =
+      "environment";
+
+  }
+
+  else {
+
+    currentCameraMode =
+      "user";
+
+  }
+
+
+  // ----------------------------------------------------
+  // Stop only camera
+  // ----------------------------------------------------
+
+  if (cameraStream) {
+
+    cameraStream
+      .getTracks()
+      .forEach(track => {
+
+        track.stop();
+
+      });
+
+    cameraStream = null;
+
+  }
+
+
+  video.srcObject = null;
+
+
+  status.innerHTML =
+    "⏳ Switching camera...";
+
+
+  // ----------------------------------------------------
+  // Start selected camera
+  // ----------------------------------------------------
+
+  try {
+
+    cameraStream =
+      await navigator.mediaDevices.getUserMedia({
+
+        video: {
+
+          facingMode:
+            currentCameraMode
+
+        },
+
+        audio: false
+
+      });
+
+
+    video.srcObject =
+      cameraStream;
+
+
+    updateCameraLabel();
+
+
+    // Front = mirrored
+    // Back = normal
+
+    if (currentCameraMode === "user") {
+
+      video.style.transform =
+        "scaleX(-1)";
+
+    }
+
+    else {
+
+      video.style.transform =
+        "scaleX(1)";
+
+    }
 
 
     status.innerHTML =
-      "❌ Camera error";
+      "Camera switched";
+
+
+    // Keep detection running
+    detecting = true;
+
+
+    // Keep Firebase timer running
+    startFirebaseTimer();
+
+  }
+
+
+  catch (error) {
+
+    console.log(
+      "Camera switch error:",
+      error
+    );
+
+
+    cameraStream = null;
+
+    video.srcObject = null;
+
+    detecting = false;
+
+    stopFirebaseTimer();
+
+
+    status.innerHTML =
+      "❌ Camera switch failed";
+
+  }
+
+}
+
+
+// ======================================================
+// UPDATE CAMERA LABEL
+// ======================================================
+
+function updateCameraLabel() {
+
+  if (currentCameraMode === "user") {
+
+    cameraMode.innerHTML =
+      "📱 Camera: Front";
+
+  }
+
+  else {
+
+    cameraMode.innerHTML =
+      "📱 Camera: Back";
 
   }
 
@@ -407,17 +730,18 @@ async function startCamera() {
 
 function setupFaceMesh() {
 
+  faceMesh =
+    new FaceMesh({
 
-  faceMesh = new FaceMesh({
+      locateFile: function(file) {
 
-    locateFile: function(file) {
+        return
+          "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/"
+          + file;
 
-      return "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/"
-             + file;
+      }
 
-    }
-
-  });
+    });
 
 
   faceMesh.setOptions({
@@ -433,13 +757,9 @@ function setupFaceMesh() {
   });
 
 
-  faceMesh.onResults(onResults);
-
-
-  detecting = true;
-
-
-  detectFace();
+  faceMesh.onResults(
+    onResults
+  );
 
 }
 
@@ -450,7 +770,6 @@ function setupFaceMesh() {
 
 async function detectFace() {
 
-
   if (!detecting) {
 
     return;
@@ -458,19 +777,37 @@ async function detectFace() {
   }
 
 
-  if (video.readyState >= 2) {
+  if (
+    video.readyState >= 2 &&
+    faceMesh
+  ) {
 
+    try {
 
-    await faceMesh.send({
+      await faceMesh.send({
 
-      image: video
+        image: video
 
-    });
+      });
+
+    }
+
+    catch (error) {
+
+      console.log(
+        "MediaPipe error:",
+        error
+      );
+
+    }
 
   }
 
 
-  requestAnimationFrame(detectFace);
+  detectAnimationFrame =
+    requestAnimationFrame(
+      detectFace
+    );
 
 }
 
@@ -479,19 +816,24 @@ async function detectFace() {
 // DISTANCE BETWEEN TWO POINTS
 // ======================================================
 
-function distance(point1, point2) {
-
+function distance(
+  point1,
+  point2
+) {
 
   const x =
-    point1.x - point2.x;
+    point1.x -
+    point2.x;
 
   const y =
-    point1.y - point2.y;
+    point1.y -
+    point2.y;
 
 
   return Math.sqrt(
 
-    x * x + y * y
+    x * x +
+    y * y
 
   );
 
@@ -513,7 +855,6 @@ function calculateEAR(
   p6
 
 ) {
-
 
   const vertical1 =
     distance(
@@ -544,10 +885,7 @@ function calculateEAR(
 
   return (
 
-    (vertical1 + vertical2)
-
-    /
-
+    (vertical1 + vertical2) /
     (2 * horizontal)
 
   );
@@ -561,10 +899,9 @@ function calculateEAR(
 
 function onResults(results) {
 
-
-  // ------------------------------------------
+  // ----------------------------------------------------
   // NO FACE
-  // ------------------------------------------
+  // ----------------------------------------------------
 
   if (
 
@@ -574,27 +911,25 @@ function onResults(results) {
 
   ) {
 
-
     status.innerHTML =
       "❌ FACE NOT DETECTED";
-
-
-    // Keep previous eye status
 
     return;
 
   }
 
 
-  // Get face landmarks
+  // ----------------------------------------------------
+  // FACE LANDMARKS
+  // ----------------------------------------------------
 
   const landmarks =
     results.multiFaceLandmarks[0];
 
 
-  // ------------------------------------------
+  // ----------------------------------------------------
   // LEFT EYE
-  // ------------------------------------------
+  // ----------------------------------------------------
 
   const leftEAR =
     calculateEAR(
@@ -611,9 +946,9 @@ function onResults(results) {
     );
 
 
-  // ------------------------------------------
+  // ----------------------------------------------------
   // RIGHT EYE
-  // ------------------------------------------
+  // ----------------------------------------------------
 
   const rightEAR =
     calculateEAR(
@@ -630,7 +965,9 @@ function onResults(results) {
     );
 
 
-  // Average EAR
+  // ----------------------------------------------------
+  // AVERAGE EAR
+  // ----------------------------------------------------
 
   const ear =
     (leftEAR + rightEAR) / 2;
@@ -642,12 +979,11 @@ function onResults(results) {
   );
 
 
-  // ------------------------------------------
+  // ----------------------------------------------------
   // EYES CLOSED
-  // ------------------------------------------
+  // ----------------------------------------------------
 
   if (ear < 0.20) {
-
 
     status.innerHTML =
       "😴 EYES CLOSED";
@@ -659,12 +995,11 @@ function onResults(results) {
   }
 
 
-  // ------------------------------------------
+  // ----------------------------------------------------
   // EYES OPEN
-  // ------------------------------------------
+  // ----------------------------------------------------
 
   else {
-
 
     status.innerHTML =
       "👀 EYES OPEN";
@@ -684,17 +1019,27 @@ function onResults(results) {
 
 function stopCamera() {
 
-
   detecting = false;
 
 
-  // Stop Firebase timer
+  // Stop animation loop
+  if (detectAnimationFrame) {
 
+    cancelAnimationFrame(
+      detectAnimationFrame
+    );
+
+    detectAnimationFrame = null;
+
+  }
+
+
+  // Stop Firebase
   stopFirebaseTimer();
 
 
+  // Stop camera tracks
   if (cameraStream) {
-
 
     cameraStream
       .getTracks()
@@ -703,7 +1048,6 @@ function stopCamera() {
         track.stop();
 
       });
-
 
     cameraStream = null;
 
@@ -721,6 +1065,13 @@ function stopCamera() {
     "⚪ Firebase timer stopped";
 
 }
+
+
+// ======================================================
+// INITIAL CAMERA LABEL
+// ======================================================
+
+updateCameraLabel();
 
 
 </script>
