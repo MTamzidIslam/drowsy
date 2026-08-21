@@ -7,7 +7,7 @@
   <meta name="viewport"
         content="width=device-width, initial-scale=1.0">
 
-  <title>Drowsy: The sleep alarm</title>
+  <title>Drowsy: the sleep alarm</title>
 
 
   <!-- =========================
@@ -69,21 +69,19 @@
 <body>
 
 
-  <h1> Drowsy: The sleep alarm</h1>
+  <h1>Drowsy: the sleep alarm</h1>
 
   <h2>for drivers</h2>
-
-  
 
 
   <!-- CAMERA BUTTONS -->
 
   <button onclick="startCamera()">
-    Start Camera
+    📷 Start Camera
   </button>
 
   <button onclick="stopCamera()">
-    Camera Off
+    ⛔ Camera Off
   </button>
 
 
@@ -115,7 +113,7 @@
   <!-- FIREBASE TEST BUTTON -->
 
   <button onclick="testFirebase()">
-    Test Firebase
+    🧪 Test Firebase
   </button>
 
 
@@ -578,7 +576,7 @@ function onResults(results) {
 
 
     status.innerHTML =
-      "FACE NOT DETECTED";
+      "❌ FACE NOT DETECTED";
 
 
     // Keep previous eye status
@@ -652,7 +650,7 @@ function onResults(results) {
 
 
     status.innerHTML =
-      "EYES CLOSED";
+      "😴 EYES CLOSED";
 
 
     currentEyeStatus =
@@ -669,7 +667,7 @@ function onResults(results) {
 
 
     status.innerHTML =
-      " EYES OPEN";
+      "👀 EYES OPEN";
 
 
     currentEyeStatus =
@@ -716,7 +714,7 @@ function stopCamera() {
 
 
   status.innerHTML =
-    " Camera OFF";
+    "📷 Camera OFF";
 
 
   firebaseStatus.innerHTML =
