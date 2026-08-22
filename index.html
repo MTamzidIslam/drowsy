@@ -9,13 +9,11 @@
 
   <title>Drowsy: the sleep alarm</title>
 
-
   <!-- ==================================================
        MEDIAPIPE
        ================================================== -->
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-
 
   <!-- ==================================================
        FIREBASE
@@ -25,10 +23,6 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-
-  <!-- ==================================================
-       STYLE
-       ================================================== -->
 
   <style>
 
@@ -97,6 +91,11 @@
       font-size: 18px;
       font-weight: bold;
       margin: 10px;
+    }
+
+    #thresholdValue {
+      font-size: 16px;
+      margin: 8px;
     }
 
     #firebaseStatus {
@@ -168,6 +167,10 @@
 
   <div id="earValue">
     EAR: --
+  </div>
+
+  <div id="thresholdValue">
+    Closed threshold: --
   </div>
 
 
@@ -253,6 +256,9 @@ const eyeStatus =
 const earValue =
   document.getElementById("earValue");
 
+const thresholdValue =
+  document.getElementById("thresholdValue");
+
 const firebaseStatus =
   document.getElementById("firebaseStatus");
 
@@ -282,6 +288,26 @@ let firebaseTimer = null;
 
 
 // ======================================================
+// CALIBRATION VARIABLES
+// ======================================================
+
+let EAR_THRESHOLD = 0.17;
+
+let calibrationValues = [];
+
+let calibrationStartTime = null;
+
+let calibrated = false;
+
+
+// Number of consecutive closed frames
+
+let closedFrames = 0;
+
+const REQUIRED_CLOSED_FRAMES = 5;
+
+
+// ======================================================
 // CAMERA LABEL
 // ======================================================
 
@@ -298,6 +324,28 @@ function updateCameraLabel() {
       "📱 Camera: Back";
 
   }
+
+}
+
+
+// ======================================================
+// RESET CALIBRATION
+// ======================================================
+
+function resetCalibration() {
+
+  calibrationValues = [];
+
+  calibrationStartTime = null;
+
+  calibrated = false;
+
+  closedFrames = 0;
+
+  EAR_THRESHOLD = 0.17;
+
+  thresholdValue.innerHTML =
+    "Closed threshold: calibrating...";
 
 }
 
@@ -368,9 +416,9 @@ function sendEyeStatusToFirebase() {
   };
 
 
-  // ----------------------------------------------------
+  // ====================================================
   // HISTORY
-  // ----------------------------------------------------
+  // ====================================================
 
   const historyPromise =
     database
@@ -378,9 +426,9 @@ function sendEyeStatusToFirebase() {
       .push(eyeData);
 
 
-  // ----------------------------------------------------
+  // ====================================================
   // LATEST
-  // ----------------------------------------------------
+  // ====================================================
 
   const latestPromise =
     database
@@ -429,9 +477,7 @@ function startFirebaseTimer() {
 
   stopFirebaseTimer();
 
-
   sendEyeStatusToFirebase();
-
 
   firebaseTimer =
     setInterval(
@@ -474,6 +520,12 @@ async function startCamera() {
 
     status.innerHTML =
       "⏳ Starting camera...";
+
+
+    // Reset calibration every time
+    // camera is started
+
+    resetCalibration();
 
 
     cameraStream =
@@ -533,7 +585,24 @@ async function startCamera() {
 
 
     // --------------------------------------------------
-    // MediaPipe
+    // Reset display
+    // --------------------------------------------------
+
+    status.innerHTML =
+      "👀 Keep eyes OPEN...";
+
+    faceStatus.innerHTML =
+      "🔍 Searching...";
+
+    eyeStatus.innerHTML =
+      "Calibration...";
+
+    earValue.innerHTML =
+      "EAR: --";
+
+
+    // --------------------------------------------------
+    // Setup MediaPipe
     // --------------------------------------------------
 
     if (!faceMesh) {
@@ -548,26 +617,18 @@ async function startCamera() {
     lastDetectionTime = 0;
 
 
-    status.innerHTML =
-      "🔍 Detecting face...";
-
-
-    faceStatus.innerHTML =
-      "🔍 Searching...";
-
-
-    eyeStatus.innerHTML =
-      "Eyes: --";
-
-
-    earValue.innerHTML =
-      "EAR: --";
-
+    // --------------------------------------------------
+    // Start detection
+    // --------------------------------------------------
 
     detectFace(
       performance.now()
     );
 
+
+    // --------------------------------------------------
+    // Start Firebase
+    // --------------------------------------------------
 
     startFirebaseTimer();
 
@@ -595,13 +656,13 @@ async function startCamera() {
 
 
 // ======================================================
-// SWITCH FRONT / BACK CAMERA
+// SWITCH CAMERA
 // ======================================================
 
 async function switchCamera() {
 
   // ----------------------------------------------------
-  // Change selected camera if camera is OFF
+  // If camera is OFF
   // ----------------------------------------------------
 
   if (!cameraStream) {
@@ -627,7 +688,7 @@ async function switchCamera() {
 
 
   // ----------------------------------------------------
-  // Switch mode
+  // Select opposite camera
   // ----------------------------------------------------
 
   if (currentCameraMode === "user") {
@@ -659,6 +720,13 @@ async function switchCamera() {
   cameraStream = null;
 
   video.srcObject = null;
+
+
+  // ----------------------------------------------------
+  // Reset calibration
+  // ----------------------------------------------------
+
+  resetCalibration();
 
 
   status.innerHTML =
@@ -703,6 +771,10 @@ async function switchCamera() {
     await video.play();
 
 
+    // --------------------------------------------------
+    // Mirror front camera
+    // --------------------------------------------------
+
     if (currentCameraMode === "user") {
 
       video.style.transform =
@@ -725,7 +797,16 @@ async function switchCamera() {
 
 
     status.innerHTML =
-      "🔍 Detecting face...";
+      "👀 Keep eyes OPEN...";
+
+    faceStatus.innerHTML =
+      "🔍 Searching...";
+
+    eyeStatus.innerHTML =
+      "Calibration...";
+
+    earValue.innerHTML =
+      "EAR: --";
 
 
     detectFace(
@@ -865,7 +946,7 @@ async function detectFace(timestamp) {
 
 
 // ======================================================
-// DISTANCE BETWEEN POINTS
+// DISTANCE BETWEEN TWO POINTS
 // ======================================================
 
 function distance(
@@ -894,7 +975,7 @@ function distance(
 
 
 // ======================================================
-// EAR
+// EAR CALCULATION
 // ======================================================
 
 function calculateEAR(
@@ -954,9 +1035,9 @@ function calculateEAR(
 
 function onResults(results) {
 
-  // ----------------------------------------------------
+  // ==================================================
   // NO FACE
-  // ----------------------------------------------------
+  // ==================================================
 
   if (
 
@@ -982,14 +1063,17 @@ function onResults(results) {
       "🔍 Looking for face...";
 
 
+    // Don't change currentEyeStatus
+    // while face is missing
+
     return;
 
   }
 
 
-  // ----------------------------------------------------
+  // ==================================================
   // FACE DETECTED
-  // ----------------------------------------------------
+  // ==================================================
 
   faceStatus.innerHTML =
     "✅ FACE DETECTED";
@@ -999,9 +1083,9 @@ function onResults(results) {
     results.multiFaceLandmarks[0];
 
 
-  // ----------------------------------------------------
+  // ==================================================
   // LEFT EYE
-  // ----------------------------------------------------
+  // ==================================================
 
   const leftEAR =
     calculateEAR(
@@ -1018,9 +1102,9 @@ function onResults(results) {
     );
 
 
-  // ----------------------------------------------------
+  // ==================================================
   // RIGHT EYE
-  // ----------------------------------------------------
+  // ==================================================
 
   const rightEAR =
     calculateEAR(
@@ -1037,9 +1121,9 @@ function onResults(results) {
     );
 
 
-  // ----------------------------------------------------
+  // ==================================================
   // AVERAGE EAR
-  // ----------------------------------------------------
+  // ==================================================
 
   const ear =
     (leftEAR + rightEAR) / 2;
@@ -1050,31 +1134,149 @@ function onResults(results) {
     ear.toFixed(3);
 
 
-  // ----------------------------------------------------
-  // CLOSED
-  // ----------------------------------------------------
+  // ==================================================
+  // CALIBRATION
+  // ==================================================
 
-  if (ear < 5) {
+  if (!calibrated) {
 
-    eyeStatus.innerHTML =
-      "😴 EYES CLOSED";
+    if (calibrationStartTime === null) {
+
+      calibrationStartTime =
+        performance.now();
+
+    }
 
 
-    status.innerHTML =
-      "✅ FACE DETECTED";
+    const elapsed =
+      performance.now() -
+      calibrationStartTime;
 
 
-    currentEyeStatus =
-      "eye closed";
+    // ----------------------------------------------
+    // Collect open-eye EAR for 2 seconds
+    // ----------------------------------------------
+
+    if (elapsed < 2000) {
+
+      calibrationValues.push(ear);
+
+
+      status.innerHTML =
+        "👀 Keep eyes OPEN — calibrating...";
+
+
+      eyeStatus.innerHTML =
+        "Calibration...";
+
+
+      return;
+
+    }
+
+
+    // ----------------------------------------------
+    // Need enough samples
+    // ----------------------------------------------
+
+    if (calibrationValues.length >= 10) {
+
+      const averageOpenEAR =
+        calibrationValues.reduce(
+          (sum, value) => sum + value,
+          0
+        ) / calibrationValues.length;
+
+
+      // Use 70% of normal open-eye EAR
+
+      EAR_THRESHOLD =
+        averageOpenEAR * 0.70;
+
+
+      calibrated = true;
+
+
+      console.log(
+        "Average open-eye EAR:",
+        averageOpenEAR
+      );
+
+
+      console.log(
+        "Calculated threshold:",
+        EAR_THRESHOLD
+      );
+
+
+      thresholdValue.innerHTML =
+        "Closed threshold: " +
+        EAR_THRESHOLD.toFixed(3);
+
+
+      status.innerHTML =
+        "✅ Calibration complete";
+
+
+      eyeStatus.innerHTML =
+        "👀 EYES OPEN";
+
+
+      currentEyeStatus =
+        "eye open";
+
+
+      closedFrames = 0;
+
+    }
+
+
+    return;
 
   }
 
 
-  // ----------------------------------------------------
-  // OPEN
-  // ----------------------------------------------------
+  // ==================================================
+  // EYE CLOSED
+  // ==================================================
+
+  if (ear < EAR_THRESHOLD) {
+
+    closedFrames++;
+
+
+    // Only classify as closed after
+    // several consecutive frames
+
+    if (
+      closedFrames >=
+      REQUIRED_CLOSED_FRAMES
+    ) {
+
+      eyeStatus.innerHTML =
+        "😴 EYES CLOSED";
+
+
+      status.innerHTML =
+        "✅ FACE DETECTED";
+
+
+      currentEyeStatus =
+        "eye closed";
+
+    }
+
+  }
+
+
+  // ==================================================
+  // EYE OPEN
+  // ==================================================
 
   else {
+
+    closedFrames = 0;
+
 
     eyeStatus.innerHTML =
       "👀 EYES OPEN";
@@ -1101,6 +1303,10 @@ function stopCamera() {
   detecting = false;
 
 
+  // ----------------------------------------------------
+  // Stop animation
+  // ----------------------------------------------------
+
   if (detectAnimationFrame) {
 
     cancelAnimationFrame(
@@ -1112,8 +1318,16 @@ function stopCamera() {
   }
 
 
+  // ----------------------------------------------------
+  // Stop Firebase
+  // ----------------------------------------------------
+
   stopFirebaseTimer();
 
+
+  // ----------------------------------------------------
+  // Stop camera tracks
+  // ----------------------------------------------------
 
   if (cameraStream) {
 
@@ -1134,6 +1348,13 @@ function stopCamera() {
     null;
 
 
+  // ----------------------------------------------------
+  // Reset everything
+  // ----------------------------------------------------
+
+  resetCalibration();
+
+
   status.innerHTML =
     "📷 Camera OFF";
 
@@ -1150,6 +1371,10 @@ function stopCamera() {
     "EAR: --";
 
 
+  thresholdValue.innerHTML =
+    "Closed threshold: --";
+
+
   firebaseStatus.innerHTML =
     "⚪ Firebase timer stopped";
 
@@ -1157,7 +1382,7 @@ function stopCamera() {
 
 
 // ======================================================
-// INITIAL CAMERA LABEL
+// INITIAL LABEL
 // ======================================================
 
 updateCameraLabel();
